@@ -1,0 +1,11 @@
+[workspace]
+members = [ ".", "ntfs-upcase" ]
+
+[package]
+edition = "2021"
+name = "ntfs-pathutils"
+version = "0.1.0-dev"
+
+[dependencies]
+ntfs-upcase = { path = "./ntfs-upcase" }
+unicode-normalization = "0.1"
