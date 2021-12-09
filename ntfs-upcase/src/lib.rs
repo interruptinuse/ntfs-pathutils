@@ -141,8 +141,6 @@ fn upcasetable_try_parse_upcase_file<U: Read>(upcase: &mut U) -> Result<NtfsUpca
 	while let Ok(codepoint) = upcase.read_u16::<byteorder::LittleEndian>() {
 		crc = crc64_digest(crc, &codepoint.to_le_bytes());
 		chars.push(codepoint);
-		//chars.push(char::from_u32(codepoint as u32)
-			//.ok_or(NtfsUpcaseTableError::CharTryFromError(codepoint))?);
 	};
 
 	Ok(NtfsUpcaseTable {
