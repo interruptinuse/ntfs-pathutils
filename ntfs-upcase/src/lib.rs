@@ -150,6 +150,24 @@ fn upcasetable_try_parse_upcase_file<U: Read>(upcase: &mut U) -> Result<NtfsUpca
 			return Err(UpcaseFileUnexpectedlyLarge(chars));
 		}
 
+		if codepoint == 0xFFFF {
+			if let Ok(n_id) = upcase.read_u16::<byteorder::LittleEndian>() {
+				for _ in 0..n_id {
+					crc = crc64_digest(crc, &index.to_le_bytes());
+
+					let codepoint = index.try_into();
+					if let Ok(codepoint) = codepoint {
+						chars.push(codepoint);
+						index += 1;
+					} else {
+						return Err(UpcaseFileUnexpectedlyLarge(chars));
+					}
+				}
+
+				continue;
+			};
+		}
+
 		crc = crc64_digest(crc, &codepoint.to_le_bytes());
 		chars.push(codepoint);
 		index += 1;
@@ -204,9 +222,33 @@ fn upcasetable_try_parse_upcase_and_info_files<U: Read, I: Read>(upcase: &mut U,
 
 #[test]
 fn test_try_parse_upcase_file() {
-	let mut upcase_file = Cursor::new(vec![0u8, 0, 1, 0, 2, 0]);
-	let table = upcasetable_try_parse_upcase_file(&mut upcase_file).unwrap();
-	assert_eq!(table.chars, vec![0u16, 1, 2]);
+	macro_rules! assert_data_eq_chars {
+		($data:expr, $chars:expr) => {
+			let mut upcase_file = Cursor::new($data);
+			let table = upcasetable_try_parse_upcase_file(&mut upcase_file).unwrap();
+			assert_eq!(table.chars, $chars);
+		}
+	}
+
+	// Naive table
+	assert_data_eq_chars!(
+		vec![0u8, 0, 1, 0, 2, 0],
+		vec![  0u16,    1,    2]);
+
+	// Compressed table
+	assert_data_eq_chars!(
+		vec![0xFFu8, 0xFF, 7, 0],
+		vec![0u16, 1, 2, 3, 4, 5, 6]);
+
+	// Compressed table, again
+	assert_data_eq_chars!(
+		vec![0u8, 0, 0xFF, 0xFF, 4, 0, 0x05, 0x00],
+		vec![0u16,         1, 2, 3, 4,          5]);
+
+	// Table not compressed (but has an FFFF at the end)
+	assert_data_eq_chars!(
+		vec![0u8, 0, 1, 0, 0xFF, 0xFF],
+		vec![  0u16,    1,     0xFFFF]);
 
 	// Table of a size not multiple of 2 bytes
 	let mut upcase_file = Cursor::new(vec![0u8]);
