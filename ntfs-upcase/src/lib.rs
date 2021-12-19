@@ -2,8 +2,9 @@
 //! =================================================
 //!
 //! Per the [asmhackers][asmhackers] documentation: The $UpCase file itself
-//! is a simple list of all Unicode characters in uppercase.  An input Unicode
-//! code point N corresponds to N-th word (2-byte LSB value) of the file.
+//! is a UTF-16=>UTF-16 mapping table; a Unicode code point N is to be mapped
+//! to the UTF-16 character (2-byte little endian word) at index N into the
+//! table.
 //!
 //! [asmhackers]: http://bos.asmhackers.net/docs/filesystems/ntfs/upcase.html
 
@@ -61,15 +62,26 @@ pub struct NtfsUpcaseTableInfo {
 
 #[derive(Debug, Display)]
 pub enum NtfsUpcaseTableError {
+	/// Attempted to parse a table from a Read object that provides more than
+	/// 65536 bytes of data.
 	#[display(fmt = "UpcaseFileUnexpectedlyLarge: retrieved chars = {:?}", _0)]
 	UpcaseFileUnexpectedlyLarge(Vec<u16>),
 
+	/// Attempted to parse a table from a Read object which provides an odd
+	/// number of bytes (is not a multiple of word size).
 	#[display(fmt = "UpcaseFileSizeNotMultipleOfWordSize: retrieved chars = {:?}", _0)]
 	UpcaseFileSizeNotMultipleOfWordSize(Vec<u16>),
 
+	/// Attempted to parse the $UpCase:$Info ADS from a Read object that does
+	/// not provide exactly 32 bytes of data.
 	#[display(fmt = "UnexpectedUpcaseInfoFileSize: {:?}", _0)]
 	UnexpectedUpcaseInfoFileSize(std::io::Error),
+
+	/// Unexpected IO error while attempting to parse the $UpCase:$Info ADS.
 	UnexpectedUpcaseInfoFileError(std::io::Error),
+
+	/// The CRC64 value from $UpCase:$Info and the computed CRC64 value don't
+	/// match.
 	#[display(fmt = "UpcaseInfoCrcMismatch: INFO CRC64 = {:#018x}, computed CRC64 = {:#018x}", _0, _1)]
 	UpcaseInfoCrcMismatch(u64, u64, NtfsUpcaseTable),
 }
@@ -98,9 +110,8 @@ impl NtfsUpcaseTable {
 
 
 // This is the exact same table as in the ECMA-182 CRC-64 algorithm (implemented
-// by the crc and crc_catalog crates).  However, I didn't manage to make
-// CRC_64_ECMA_182 work.  Idk.  CRC implementations don't seem to be exceedingly
-// consistent.
+// by the crc and crc_catalog crates).  I didn't manage to make CRC_64_ECMA_182
+// work, so I'm just sticking with the ntfs-3g implementation.
 const fn gen_crc_table() -> [u64; 256] {
 	let mut table: [u64; 256] = [0; 256];
 
@@ -314,10 +325,10 @@ fn test_try_parse_upcase_file() {
 
 #[test]
 fn test_try_parse_upcase_and_info_files() {
-	let mut upcase_mswin10 = Cursor::new(UPCASEDATA_NTFS3G);
-	let mut upcaseinfo_mswin10 = Cursor::new(UPCASEINFO_NTFS3G);
+	let mut upcase_ntfs3g = Cursor::new(UPCASEDATA_NTFS3G);
+	let mut upcaseinfo_ntfs3g = Cursor::new(UPCASEINFO_NTFS3G);
 
-	let table = upcasetable_try_parse_upcase_and_info_files(&mut upcase_mswin10, &mut upcaseinfo_mswin10).unwrap();
+	let table = upcasetable_try_parse_upcase_and_info_files(&mut upcase_ntfs3g, &mut upcaseinfo_ntfs3g).unwrap();
 	let info = table.info.unwrap();
 	assert_eq!(info.len,       32);
 	assert_eq!(info.osmajor,   0);
