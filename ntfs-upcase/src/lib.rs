@@ -8,10 +8,6 @@
 //! [asmhackers]: http://bos.asmhackers.net/docs/filesystems/ntfs/upcase.html
 
 
-extern crate lazy_static;
-extern crate derive_more;
-extern crate byteorder;
-
 use std::error::Error;
 use std::fmt::Debug;
 use std::io::Read;

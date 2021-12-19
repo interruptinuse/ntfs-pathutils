@@ -1,9 +1,4 @@
-extern crate ntfs_upcase;
-extern crate unicode_normalization;
-
-use std::default::Default;
 use ntfs_upcase::NtfsUpcaseTable;
-use unicode_normalization::char::compose;
 use unicode_normalization::UnicodeNormalization;
 
 
