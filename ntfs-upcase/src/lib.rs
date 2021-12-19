@@ -20,10 +20,7 @@ use derive_more::Display;
 use byteorder::{LittleEndian, ReadBytesExt, ByteOrder};
 
 
-use self::NtfsUpcaseTableError::{
-	UnexpectedUpcaseInfoFileSize,
-	UpcaseInfoCrcMismatch,
-};
+use self::NtfsUpcaseTableError::*;
 
 
 pub const CRC64_POLY: u64 = 0x9a6c9329ac4bc9b5;
@@ -64,6 +61,12 @@ pub struct NtfsUpcaseTableInfo {
 
 #[derive(Debug, Display)]
 pub enum NtfsUpcaseTableError {
+	#[display(fmt = "UpcaseFileUnexpectedlyLarge: retrieved chars = {:?}", _0)]
+	UpcaseFileUnexpectedlyLarge(Vec<u16>),
+
+	#[display(fmt = "UpcaseFileSizeNotMultipleOfWordSize: retrieved chars = {:?}", _0)]
+	UpcaseFileSizeNotMultipleOfWordSize(Vec<u16>),
+
 	#[display(fmt = "UnexpectedUpcaseInfoFileSize: {:?}", _0)]
 	UnexpectedUpcaseInfoFileSize(std::io::Error),
 	UnexpectedUpcaseInfoFileError(std::io::Error),
@@ -140,10 +143,25 @@ fn upcasetable_try_parse_upcase_file<U: Read>(upcase: &mut U) -> Result<NtfsUpca
 	let mut chars: Vec<u16> = Vec::with_capacity(DEFAULT_TABLE_SIZE_CHARS);
 	let mut crc = 0u64;
 
+	let mut index = 0u32;
+
 	while let Ok(codepoint) = upcase.read_u16::<byteorder::LittleEndian>() {
+		if index > u16::MAX.into() {
+			return Err(UpcaseFileUnexpectedlyLarge(chars));
+		}
+
 		crc = crc64_digest(crc, &codepoint.to_le_bytes());
 		chars.push(codepoint);
+		index += 1;
 	};
+
+	if upcase.read_u8().is_ok() {
+		return if index >= u16::MAX.into() {
+			Err(UpcaseFileUnexpectedlyLarge(chars))
+		} else {
+			Err(UpcaseFileSizeNotMultipleOfWordSize(chars))
+		}
+	}
 
 	Ok(NtfsUpcaseTable {
 		chars,
@@ -189,6 +207,15 @@ fn test_try_parse_upcase_file() {
 	let mut upcase_file = Cursor::new(vec![0u8, 0, 1, 0, 2, 0]);
 	let table = upcasetable_try_parse_upcase_file(&mut upcase_file).unwrap();
 	assert_eq!(table.chars, vec![0u16, 1, 2]);
+
+	// Table of a size not multiple of 2 bytes
+	let mut upcase_file = Cursor::new(vec![0u8]);
+	assert!(matches!(upcasetable_try_parse_upcase_file(&mut upcase_file), Err(UpcaseFileSizeNotMultipleOfWordSize(_))));
+
+	// File too large
+	const BIG_DATA_SIZE: usize = DEFAULT_TABLE_SIZE_CHARS * 2 + 1;
+	let mut loadsadata = Cursor::new([0u8; BIG_DATA_SIZE]);
+	assert!(matches!(upcasetable_try_parse_upcase_file(&mut loadsadata), Err(UpcaseFileUnexpectedlyLarge(_))));
 }
 
 #[test]
@@ -205,4 +232,5 @@ fn test_try_parse_upcase_and_info_files() {
 	assert_eq!(info.packmajor, 0);
 	assert_eq!(info.packminor, 0);
 	assert_eq!(table.file_crc, 0xdadc7e776b1b690c);
+	assert_eq!(table.chars.len(), 65536);
 }
