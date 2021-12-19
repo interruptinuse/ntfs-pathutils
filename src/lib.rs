@@ -16,16 +16,8 @@ pub enum NtfsPathCollatorError {
 	DecodeUtf16Error(std::char::DecodeUtf16Error)
 }
 
+
 type Result<T> = std::result::Result<T, NtfsPathCollatorError>;
-
-
-impl Default for NtfsPathCollator {
-	fn default() -> Self {
-		Self {
-			upcase: (*ntfs_upcase::UPCASE_NTFS3G).clone()
-		}
-	}
-}
 
 
 impl NtfsPathCollator {

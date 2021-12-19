@@ -16,7 +16,9 @@ use std::error::Error;
 use std::fmt::Debug;
 use std::io::Read;
 use std::vec::Vec;
+#[cfg(any(feature = "lazy_static", test))]
 use std::io::Cursor;
+#[cfg(feature = "lazy_static")]
 use lazy_static::lazy_static;
 use derive_more::Display;
 use byteorder::{LittleEndian, ReadBytesExt, ByteOrder};
@@ -32,11 +34,15 @@ pub const CRC64_POLY: u64 = 0x9a6c9329ac4bc9b5;
 pub const CRC64_XOROUT: u64 = 0xffffffffffffffff;
 pub const DEFAULT_TABLE_SIZE_CHARS: usize = 65536;
 pub const CRC64_TABLE: [u64; 256] = gen_crc_table();
+pub const UPCASEDATA_NTFS3G: &[u8] = include_bytes!("upcase_NTFS3G.bin");
+pub const UPCASEINFO_NTFS3G: &[u8] = include_bytes!("upcaseinfo_NTFS3G.bin");
+
+#[cfg(feature = "lazy_static")]
 lazy_static! {
 	pub static ref UPCASE_NTFS3G: NtfsUpcaseTable
 		= NtfsUpcaseTable::try_parse_upcase_and_info_files(
-			&mut Cursor::new(include_bytes!("upcase_NTFS3G.bin")),
-			&mut Cursor::new(include_bytes!("upcaseinfo_NTFS3G.bin"))).unwrap();
+			&mut Cursor::new(UPCASEDATA_NTFS3G),
+			&mut Cursor::new(UPCASEINFO_NTFS3G)).unwrap();
 }
 
 
@@ -191,8 +197,8 @@ fn test_try_parse_upcase_file() {
 
 #[test]
 fn test_try_parse_upcase_and_info_files() {
-	let mut upcase_mswin10 = Cursor::new(include_bytes!("upcase_NTFS3G.bin"));
-	let mut upcaseinfo_mswin10 = Cursor::new(include_bytes!("upcaseinfo_NTFS3G.bin"));
+	let mut upcase_mswin10 = Cursor::new(UPCASEDATA_NTFS3G);
+	let mut upcaseinfo_mswin10 = Cursor::new(UPCASEINFO_NTFS3G);
 
 	let table = upcasetable_try_parse_upcase_and_info_files(&mut upcase_mswin10, &mut upcaseinfo_mswin10).unwrap();
 	let info = table.info.unwrap();
